@@ -156,7 +156,7 @@ def build_card_html(video, channel_avg_views):
     if len(description) > 150:
         description = description[:150] + "..."
     
-    card_html = 
+    card_html = f"""
     <div class="video-card">
         <img src="{video['thumbnail']}" class="video-thumbnail" />
         <div class="video-title">{video['title']}</div>
@@ -173,7 +173,7 @@ def build_card_html(video, channel_avg_views):
         <div class="video-meta">
             <a href="{video['url']}" class="video-link">Watch Video</a>
         </div>
-    </div>
+    </div>"""
     return card_html
 
 def main():
