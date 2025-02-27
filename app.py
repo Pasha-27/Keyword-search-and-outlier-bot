@@ -1,6 +1,7 @@
 import streamlit as st
 import math
 import json
+import isodate
 from googleapiclient.discovery import build
 
 # Set page configuration for dark theme
@@ -58,7 +59,7 @@ st.markdown("""
         background-color: #1e2538;
         border-radius: 10px;
         padding: 1rem;
-        margin-bottom: 0.3rem; /* Reduced from 1rem to 0.3rem */
+        margin-bottom: 0.3rem; /* Reduced bottom margin for tighter vertical spacing */
     }
     .video-thumbnail {
         width: 100%;
@@ -89,8 +90,6 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
-
-import isodate
 
 def parse_duration(duration_str):
     """Parse ISO 8601 duration to seconds."""
@@ -147,7 +146,7 @@ def load_channels(file_path="channels.json"):
     return data.get("channels", [])
 
 def build_card_html(video, channel_avg_views):
-    """Constructs HTML for a single video card. (No description displayed)"""
+    """Constructs HTML for a single video card, including an Engagement Rate metric."""
     color = get_outlier_color(video['outlier_multiplier'])
     outlier_html = f"<span class='outlier-pill' style='background-color:{color};'>{video['outlier_multiplier']:.1f}x</span>"
     avg_views = channel_avg_views.get(video["channel_id"], 0)
@@ -164,6 +163,9 @@ def build_card_html(video, channel_avg_views):
         <div class="video-meta">
             <strong>Outlier Score:</strong> {outlier_html} |
             <strong>Channel Avg:</strong> {format_number(int(avg_views))}
+        </div>
+        <div class="video-meta">
+            <strong>Engagement Rate:</strong> {video['engagement_rate']:.1f}%
         </div>
         <div class="video-meta">
             <a href="{video['url']}" class="video-link">Watch Video</a>
@@ -285,8 +287,12 @@ def main():
                     not any(keyword_lower in tag.lower() for tag in tags)):
                     continue
                 
+                # Retrieve stats
                 view_count = int(statistics.get("viewCount", 0))
-                # Use channel's average views to compute outlier multiplier
+                like_count = int(statistics.get("likeCount", 0)) if "likeCount" in statistics else 0
+                comment_count = int(statistics.get("commentCount", 0)) if "commentCount" in statistics else 0
+                
+                # Calculate outlier multiplier
                 if channel_id in channel_avg_views and channel_avg_views[channel_id] > 0:
                     multiplier = view_count / channel_avg_views[channel_id]
                 else:
@@ -303,6 +309,12 @@ def main():
                 if video_type == "Long (>= 3 mins)" and duration_seconds < 180:
                     continue
                 
+                # Calculate engagement rate
+                if view_count > 0:
+                    engagement_rate = ((like_count + comment_count) / view_count) * 100
+                else:
+                    engagement_rate = 0.0
+                
                 results.append({
                     "video_id": video_id,
                     "title": title,
@@ -314,7 +326,8 @@ def main():
                     "outlier_multiplier": multiplier,
                     "thumbnail": thumbnail,
                     "published_at": published_at[:10],
-                    "url": f"https://www.youtube.com/watch?v={video_id}"
+                    "url": f"https://www.youtube.com/watch?v={video_id}",
+                    "engagement_rate": engagement_rate
                 })
             
             # Sort results based on the chosen sort option
@@ -341,15 +354,12 @@ def main():
 
                 # Display results in a 3-column layout with a smaller gap
                 for i in range(0, len(results), 3):
-                    # Create three columns with smaller gap
                     columns = st.columns(3, gap="small")
-                    
-                    # For each column, if a result is available, display the card
                     for j in range(3):
                         if i + j < len(results):
                             video = results[i + j]
+                            card_html = build_card_html(video, channel_avg_views)
                             with columns[j]:
-                                card_html = build_card_html(video, channel_avg_views)
                                 st.markdown(card_html, unsafe_allow_html=True)
         
         except Exception as e:
