@@ -454,12 +454,23 @@ def main():
             
             # Fetch top comments for videos if requested
             if show_comments:
-                progress_bar = st.progress(0)
-                for i, video in enumerate(results):
-                    search_info.info(f"Fetching comments for video {i+1} of {len(results)}...")
-                    top_comments = fetch_top_comments(youtube, video["video_id"])
-                    video["top_comments"] = top_comments
-                    progress_bar.progress((i+1)/len(results))
+                st.write("### Fetching comments for search results")
+                
+                # Create a container for logs
+                comment_log_container = st.empty()
+                with comment_log_container.container():
+                    progress_bar = st.progress(0)
+                    for i, video in enumerate(results):
+                        search_info.info(f"Fetching comments for video {i+1} of {len(results)}...")
+                        # Now correctly passing the video title as the third argument
+                        top_comments = fetch_top_comments(youtube, video["video_id"], video["title"])
+                        video["top_comments"] = top_comments
+                        progress_bar.progress((i+1)/len(results))
+                    
+                # Option to hide logs after loading
+                if st.button("Clear Comment Logs"):
+                    comment_log_container.empty()
+                
                 progress_bar.empty()
             
             search_info.empty()
