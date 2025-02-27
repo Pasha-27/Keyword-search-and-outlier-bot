@@ -221,13 +221,18 @@ def main():
                 
                 title = snippet.get("title", "")
                 description = snippet.get("description", "")
+                # Retrieve tags if available; default to an empty list
+                tags = snippet.get("tags", [])
                 channel_title = snippet.get("channelTitle", "")
                 channel_id = snippet.get("channelId", "")
                 thumbnail = snippet.get("thumbnails", {}).get("high", {}).get("url", "")
                 published_at = snippet.get("publishedAt", "")
                 
-                # Extra check for keyword in title/description
-                if keyword.lower() not in title.lower() and keyword.lower() not in description.lower():
+                # Check for keyword in title, description, or any tag (case-insensitive)
+                keyword_lower = keyword.lower()
+                if (keyword_lower not in title.lower() and 
+                    keyword_lower not in description.lower() and 
+                    not any(keyword_lower in tag.lower() for tag in tags)):
                     continue
                 
                 view_count = int(statistics.get("viewCount", 0))
