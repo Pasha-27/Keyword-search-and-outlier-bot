@@ -88,6 +88,38 @@ st.markdown("""
         text-decoration: none;
         font-weight: bold;
     }
+    .comment-section {
+        margin-top: 0.8rem;
+        border-top: 1px solid #2d3748;
+        padding-top: 0.5rem;
+    }
+    .comment-card {
+        background-color: #13192a;
+        border-radius: 8px;
+        padding: 0.7rem;
+        margin-bottom: 0.5rem;
+    }
+    .comment-author {
+        color: #cbd5e0;
+        font-weight: bold;
+        margin-bottom: 0.2rem;
+        font-size: 0.9rem;
+    }
+    .comment-text {
+        color: #e2e8f0;
+        font-size: 0.85rem;
+        margin-bottom: 0.3rem;
+    }
+    .comment-likes {
+        color: #a0aec0;
+        font-size: 0.8rem;
+    }
+    .comments-toggle {
+        cursor: pointer;
+        color: #4c6ef5;
+        font-weight: bold;
+        font-size: 0.9rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -145,8 +177,39 @@ def load_channels(file_path="channels.json"):
         data = json.load(f)
     return data.get("channels", [])
 
-def build_card_html(video, channel_avg_views):
-    """Constructs HTML for a single video card, including Engagement Rate."""
+def fetch_top_comments(youtube, video_id, max_comments=5):
+    """
+    Fetches the top comments for a video by like count.
+    Returns a list of the top comments with author, text, and like count.
+    """
+    try:
+        # Fetch comments
+        comment_response = youtube.commentThreads().list(
+            part="snippet",
+            videoId=video_id,
+            order="relevance",  # Relevance includes like count in sorting
+            maxResults=20  # Fetch more and then sort ourselves to ensure we get most liked
+        ).execute()
+        
+        comments = []
+        for item in comment_response.get("items", []):
+            comment = item["snippet"]["topLevelComment"]["snippet"]
+            comments.append({
+                "author": comment["authorDisplayName"],
+                "text": comment["textDisplay"],
+                "like_count": comment.get("likeCount", 0),
+                "published_at": comment["publishedAt"][:10]
+            })
+        
+        # Sort by like count and get top max_comments
+        comments = sorted(comments, key=lambda x: x["like_count"], reverse=True)[:max_comments]
+        return comments
+    except Exception as e:
+        # Comments might be disabled for the video
+        return []
+
+def build_card_html(video, channel_avg_views, show_comments=True):
+    """Constructs HTML for a single video card, including Engagement Rate and Comments."""
     color = get_outlier_color(video['outlier_multiplier'])
     outlier_html = f"<span class='outlier-pill' style='background-color:{color};'>{video['outlier_multiplier']:.1f}x</span>"
     avg_views = channel_avg_views.get(video["channel_id"], 0)
@@ -170,11 +233,58 @@ def build_card_html(video, channel_avg_views):
         <div class="video-meta">
             <a href="{video['url']}" class="video-link">Watch Video</a>
         </div>
-    </div>
     """
+    
+    # Add comments section if available
+    if show_comments and video.get('top_comments'):
+        comment_id = f"comments-{video['video_id']}"
+        card_html += f"""
+        <div class="comment-section">
+            <div class="comments-toggle" onclick="toggleComments('{comment_id}')">
+                📝 Top Comments ({len(video['top_comments'])})
+            </div>
+            <div id="{comment_id}" style="display: block;">
+        """
+        
+        for comment in video['top_comments']:
+            card_html += f"""
+            <div class="comment-card">
+                <div class="comment-author">{comment['author']}</div>
+                <div class="comment-text">{comment['text']}</div>
+                <div class="comment-likes">❤️ {format_number(comment['like_count'])} likes • {comment['published_at']}</div>
+            </div>
+            """
+            
+        card_html += """
+            </div>
+        </div>
+        """
+    elif show_comments:
+        card_html += """
+        <div class="comment-section">
+            <div class="comments-meta">No comments available</div>
+        </div>
+        """
+        
+    card_html += "</div>"
+    
     return card_html
 
 def main():
+    # Add JavaScript for toggling comments
+    st.markdown("""
+    <script>
+    function toggleComments(id) {
+        var element = document.getElementById(id);
+        if (element.style.display === "none") {
+            element.style.display = "block";
+        } else {
+            element.style.display = "none";
+        }
+    }
+    </script>
+    """, unsafe_allow_html=True)
+    
     # Sidebar for inputs
     with st.sidebar:
         st.title("YouTube Search")
@@ -200,6 +310,8 @@ def main():
             selected_channel_names = channel_names
         else:
             selected_channel_names = st.multiselect("Select Channels", options=channel_names)
+        
+        show_comments = st.checkbox("Show Top Comments", value=True)
         
         search_button = st.button("Search Videos")
     
@@ -348,6 +460,17 @@ def main():
                 results = sorted(results, key=lambda x: x["outlier_multiplier"], reverse=True)
             
             results = results[:10]
+            
+            # Fetch top comments for videos if requested
+            if show_comments:
+                progress_bar = st.progress(0)
+                for i, video in enumerate(results):
+                    search_info.info(f"Fetching comments for video {i+1} of {len(results)}...")
+                    top_comments = fetch_top_comments(youtube, video["video_id"])
+                    video["top_comments"] = top_comments
+                    progress_bar.progress((i+1)/len(results))
+                progress_bar.empty()
+            
             search_info.empty()
             
             if not results:
@@ -365,7 +488,7 @@ def main():
                     for j in range(3):
                         if i + j < len(results):
                             video = results[i + j]
-                            card_html = build_card_html(video, channel_avg_views)
+                            card_html = build_card_html(video, channel_avg_views, show_comments)
                             with columns[j]:
                                 st.markdown(card_html, unsafe_allow_html=True)
         
