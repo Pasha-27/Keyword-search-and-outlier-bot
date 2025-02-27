@@ -21,21 +21,24 @@ st.markdown("""
     }
     
     /* Card styling */
-    .video-card {
+    .metric-card {
         background-color: #1e2538;
         border-radius: 10px;
         padding: 15px;
         margin-bottom: 15px;
+        height: 100%;
+    }
+    
+    .video-card {
+        background-color: #1e2538;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
     }
     
     /* Header styling */
     h1, h2, h3 {
         color: #ffffff;
-    }
-    
-    /* Sidebar styling */
-    .css-1d391kg, .css-1oypcwu {
-        background-color: #151b28;
     }
     
     /* Button styling */
@@ -51,6 +54,16 @@ st.markdown("""
     
     .stButton>button:hover {
         background-color: #364fc7;
+    }
+    
+    /* Remove fullscreen button from images (thumbnails) */
+    .st-emotion-cache-1y4p8pa {
+        display: none !important;
+    }
+    
+    /* Hide the "st.image" deprecation warning */
+    .element-container:has(img[src*="data:image"]) .stAlert {
+        display: none !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -136,32 +149,13 @@ def main():
     # Main content area
     st.markdown("<h1 style='color: white;'>YouTube Video Dashboard</h1>", unsafe_allow_html=True)
     
-    # Dashboard overview section using Streamlit components instead of HTML
-    metric_cols = st.columns(4)
-    
-    with metric_cols[0]:
-        st.markdown("<div style='background-color: #1e2538; padding: 15px; border-radius: 10px;'>", unsafe_allow_html=True)
-        st.markdown("<p style='color: #adb5bd; font-size: 14px; margin-bottom: 5px;'>VIDEOS FOUND</p>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size: 24px; font-weight: bold; margin-top: 0;'>0</p>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    with metric_cols[1]:
-        st.markdown("<div style='background-color: #1e2538; padding: 15px; border-radius: 10px;'>", unsafe_allow_html=True)
-        st.markdown("<p style='color: #adb5bd; font-size: 14px; margin-bottom: 5px;'>AVG VIEWS</p>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size: 24px; font-weight: bold; margin-top: 0;'>0</p>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    with metric_cols[2]:
-        st.markdown("<div style='background-color: #1e2538; padding: 15px; border-radius: 10px;'>", unsafe_allow_html=True)
-        st.markdown("<p style='color: #adb5bd; font-size: 14px; margin-bottom: 5px;'>AVG DURATION</p>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size: 24px; font-weight: bold; margin-top: 0;'>0m</p>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    with metric_cols[3]:
-        st.markdown("<div style='background-color: #1e2538; padding: 15px; border-radius: 10px;'>", unsafe_allow_html=True)
-        st.markdown("<p style='color: #adb5bd; font-size: 14px; margin-bottom: 5px;'>AVG OUTLIER SCORE</p>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size: 24px; font-weight: bold; margin-top: 0;'>0.0</p>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+    # Single metric for videos found
+    st.markdown("""
+    <div style="background-color: #1e2538; border-radius: 10px; padding: 15px; margin-bottom: 30px;">
+        <p style="color: #adb5bd; font-size: 14px; margin-bottom: 5px;">VIDEOS FOUND</p>
+        <p style="font-size: 24px; font-weight: bold; margin-top: 0;">0</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Results container
     results_container = st.container()
@@ -201,9 +195,6 @@ def main():
             ).execute()
             
             results = []
-            total_views = 0
-            total_duration = 0
-            total_outlier_score = 0
             
             for item in details_response.get("items", []):
                 video_id = item["id"]
@@ -241,11 +232,6 @@ def main():
                 if video_type == "Long (>= 3 mins)" and duration_seconds < 180:
                     continue
                 
-                # Update totals for metrics
-                total_views += view_count
-                total_duration += duration_seconds
-                total_outlier_score += outlier_score
-                
                 results.append({
                     "video_id": video_id,
                     "title": title,
@@ -277,80 +263,66 @@ def main():
                 with results_container:
                     st.error("No videos match the criteria.")
             else:
-                # Update dashboard metrics
+                # Update the videos found metric
                 num_videos = len(results)
-                avg_views = total_views / num_videos if num_videos > 0 else 0
-                avg_duration = total_duration / num_videos if num_videos > 0 else 0
-                avg_outlier_score = total_outlier_score / num_videos if num_videos > 0 else 0
                 
-                # Update the metrics cards
-                metric_cols = st.columns(4)
+                # Update the videos found metric
+                st.markdown(f"""
+                <div style="background-color: #1e2538; border-radius: 10px; padding: 15px; margin-bottom: 30px;">
+                    <p style="color: #adb5bd; font-size: 14px; margin-bottom: 5px;">VIDEOS FOUND</p>
+                    <p style="font-size: 24px; font-weight: bold; margin-top: 0;">{num_videos}</p>
+                </div>
+                """, unsafe_allow_html=True)
                 
-                with metric_cols[0]:
-                    st.markdown("<div style='background-color: #1e2538; padding: 15px; border-radius: 10px;'>", unsafe_allow_html=True)
-                    st.markdown(f"<p style='color: #adb5bd; font-size: 14px; margin-bottom: 5px;'>VIDEOS FOUND</p>", unsafe_allow_html=True)
-                    st.markdown(f"<p style='font-size: 24px; font-weight: bold; margin-top: 0;'>{num_videos}</p>", unsafe_allow_html=True)
-                    st.markdown("</div>", unsafe_allow_html=True)
-                
-                with metric_cols[1]:
-                    st.markdown("<div style='background-color: #1e2538; padding: 15px; border-radius: 10px;'>", unsafe_allow_html=True)
-                    st.markdown(f"<p style='color: #adb5bd; font-size: 14px; margin-bottom: 5px;'>AVG VIEWS</p>", unsafe_allow_html=True)
-                    st.markdown(f"<p style='font-size: 24px; font-weight: bold; margin-top: 0;'>{format_number(int(avg_views))}</p>", unsafe_allow_html=True)
-                    st.markdown("</div>", unsafe_allow_html=True)
-                
-                with metric_cols[2]:
-                    st.markdown("<div style='background-color: #1e2538; padding: 15px; border-radius: 10px;'>", unsafe_allow_html=True)
-                    st.markdown(f"<p style='color: #adb5bd; font-size: 14px; margin-bottom: 5px;'>AVG DURATION</p>", unsafe_allow_html=True)
-                    st.markdown(f"<p style='font-size: 24px; font-weight: bold; margin-top: 0;'>{format_duration(avg_duration)}</p>", unsafe_allow_html=True)
-                    st.markdown("</div>", unsafe_allow_html=True)
-                
-                with metric_cols[3]:
-                    st.markdown("<div style='background-color: #1e2538; padding: 15px; border-radius: 10px;'>", unsafe_allow_html=True)
-                    st.markdown(f"<p style='color: #adb5bd; font-size: 14px; margin-bottom: 5px;'>AVG OUTLIER SCORE</p>", unsafe_allow_html=True)
-                    st.markdown(f"<p style='font-size: 24px; font-weight: bold; margin-top: 0;'>{avg_outlier_score:.1f}</p>", unsafe_allow_html=True)
-                    st.markdown("</div>", unsafe_allow_html=True)
-                
-                # Display results in a modern card layout
+                # Display results section header
                 with results_container:
                     st.markdown("<h2 style='margin-top: 30px;'>Search Results</h2>", unsafe_allow_html=True)
+                    
+                    # Display each video
                     for video in results:
-                        # Create video card using Streamlit components
-                        st.markdown("<div style='background-color: #1e2538; padding: 15px; border-radius: 10px; margin-bottom: 15px;'>", unsafe_allow_html=True)
-                        
-                        # Create two columns for thumbnail and content
-                        video_cols = st.columns([1, 3])
-                        
-                        with video_cols[0]:
-                            st.image(video['thumbnail'], use_column_width=True)
-                        
-                        with video_cols[1]:
-                            # Title and channel
-                            st.markdown(f"<h3 style='margin-top: 0;'><a href='{video['url']}' target='_blank' style='color: #ffffff; text-decoration: none;'>{video['title']}</a></h3>", unsafe_allow_html=True)
-                            st.markdown(f"<p style='color: #adb5bd; margin-bottom: 15px;'>{video['channel']} • {video['published_at']}</p>", unsafe_allow_html=True)
-                            
-                            # Create columns for metrics
-                            metric_row = st.columns(4)
-                            
-                            with metric_row[0]:
-                                st.markdown(f"<span style='color: #adb5bd; font-size: 12px;'>VIEWS</span><br><span style='font-weight: bold;'>{format_number(video['view_count'])}</span>", unsafe_allow_html=True)
-                            
-                            with metric_row[1]:
-                                st.markdown(f"<span style='color: #adb5bd; font-size: 12px;'>LIKES</span><br><span style='font-weight: bold;'>{format_number(video['like_count'])}</span>", unsafe_allow_html=True)
-                            
-                            with metric_row[2]:
-                                st.markdown(f"<span style='color: #adb5bd; font-size: 12px;'>DURATION</span><br><span style='font-weight: bold;'>{format_duration(video['duration'])}</span>", unsafe_allow_html=True)
-                            
-                            with metric_row[3]:
-                                st.markdown(f"<span style='color: #adb5bd; font-size: 12px;'>OUTLIER SCORE</span><br><span style='font-weight: bold; color: #4c6ef5;'>{video['outlier_score']:.1f}</span>", unsafe_allow_html=True)
-                            
-                            # Description
-                            if len(video['description']) > 150:
-                                desc = video['description'][:150] + "..."
-                            else:
-                                desc = video['description']
-                            st.markdown(f"<p style='color: #d9d9d9; font-size: 14px;'>{desc}</p>", unsafe_allow_html=True)
-                        
-                        st.markdown("</div>", unsafe_allow_html=True)
+                        with st.container():
+                            st.markdown(f"""
+                            <div class="video-card">
+                                <div style="display: flex; flex-wrap: nowrap;">
+                                    <div style="flex: 0 0 30%; padding-right: 20px;">
+                                        <a href="{video['url']}" target="_blank">
+                                            <img src="{video['thumbnail']}" style="width: 100%; border-radius: 5px;" alt="{video['title']}">
+                                        </a>
+                                    </div>
+                                    <div style="flex: 0 0 70%;">
+                                        <h3 style="margin-top: 0;">
+                                            <a href="{video['url']}" target="_blank" style="color: #ffffff; text-decoration: none;">
+                                                {video['title']}
+                                            </a>
+                                        </h3>
+                                        <p style="color: #adb5bd; margin-bottom: 15px;">{video['channel']} • {video['published_at']}</p>
+                                        
+                                        <div style="display: flex; margin-bottom: 15px; flex-wrap: wrap;">
+                                            <div style="margin-right: 20px; margin-bottom: 10px;">
+                                                <span style="color: #adb5bd; font-size: 12px;">VIEWS</span><br>
+                                                <span style="font-weight: bold;">{format_number(video['view_count'])}</span>
+                                            </div>
+                                            <div style="margin-right: 20px; margin-bottom: 10px;">
+                                                <span style="color: #adb5bd; font-size: 12px;">LIKES</span><br>
+                                                <span style="font-weight: bold;">{format_number(video['like_count'])}</span>
+                                            </div>
+                                            <div style="margin-right: 20px; margin-bottom: 10px;">
+                                                <span style="color: #adb5bd; font-size: 12px;">DURATION</span><br>
+                                                <span style="font-weight: bold;">{format_duration(video['duration'])}</span>
+                                            </div>
+                                            <div style="margin-bottom: 10px;">
+                                                <span style="color: #adb5bd; font-size: 12px;">OUTLIER SCORE</span><br>
+                                                <span style="font-weight: bold; color: #4c6ef5;">{video['outlier_score']:.1f}</span>
+                                            </div>
+                                        </div>
+                                        
+                                        <p style="color: #d9d9d9; font-size: 14px;">
+                                            {video['description'][:150] + "..." if len(video['description']) > 150 else video['description']}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
         
         except Exception as e:
             with results_container:
