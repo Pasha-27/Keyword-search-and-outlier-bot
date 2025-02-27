@@ -1,6 +1,7 @@
 import streamlit as st
 import math
 import isodate
+import json
 from googleapiclient.discovery import build
 
 # Set page configuration for dark theme
@@ -105,6 +106,27 @@ def format_duration(seconds):
     else:
         return f"{int(seconds)}s"
 
+def load_channels(file_path="channels.json"):
+    """
+    Loads channel data from a JSON file.
+    The file is expected to have a structure like:
+    {
+      "channels": [
+        {
+          "id": "UCabc123",
+          "name": "Finance Guru"
+        },
+        {
+          "id": "UCdef456",
+          "name": "Money Matters"
+        }
+      ]
+    }
+    """
+    with open(file_path, "r") as f:
+        data = json.load(f)
+    return data.get("channels", [])
+
 def main():
     # Sidebar for inputs
     with st.sidebar:
@@ -160,36 +182,70 @@ def main():
         
         # Information message while searching
         search_info = st.empty()
-        search_info.info("Searching for videos...")
+        search_info.info("Searching for videos in Finance channels...")
         
         try:
             # Get YouTube API key from Streamlit secrets
             API_KEY = st.secrets["YOUTUBE_API_KEY"]
             youtube = build("youtube", "v3", developerKey=API_KEY)
             
-            # Search for videos matching the keyword
-            search_response = youtube.search().list(
-                part="snippet",
-                q=keyword,
-                type="video",
-                maxResults=50  # Fetch more results to filter later
-            ).execute()
-            
-            # Extract video IDs
-            video_ids = [item["id"]["videoId"] for item in search_response.get("items", [])]
-            if not video_ids:
-                search_info.error("No videos found.")
+            # Load finance channels from local JSON
+            channels = load_channels("channels.json")
+            if not channels:
+                search_info.error("No channels found in channels.json. Please update your file.")
                 return
             
-            # Retrieve video details (statistics, contentDetails, and snippet)
-            details_response = youtube.videos().list(
-                part="contentDetails,statistics,snippet",
-                id=",".join(video_ids)
-            ).execute()
+            all_video_ids = []
+            channel_video_map = {}  # Map channel_id -> list of video items from search
+            
+            # 1) Search each channel individually
+            for ch in channels:
+                channel_id = ch["id"]
+                channel_name = ch.get("name", "Unknown Channel")
+                
+                # Query the channel with the given keyword
+                search_response = youtube.search().list(
+                    part="snippet",
+                    q=keyword,
+                    channelId=channel_id,  # Restrict search to this channel
+                    type="video",
+                    maxResults=50
+                ).execute()
+                
+                items = search_response.get("items", [])
+                # Store results in a dict for later
+                channel_video_map[channel_id] = items
+                # Collect all video IDs
+                all_video_ids.extend([item["id"]["videoId"] for item in items])
+            
+            if not all_video_ids:
+                search_info.error("No videos found across all listed channels.")
+                return
+            
+            # 2) Retrieve details for all collected video IDs
+            #    If there are more than 50 IDs, we need to chunk them.
+            #    For simplicity, let's chunk in sets of 50.
+            details_responses = []
+            
+            def chunk_list(lst, size=50):
+                for i in range(0, len(lst), size):
+                    yield lst[i : i + size]
+            
+            for chunk in chunk_list(all_video_ids, 50):
+                details_response = youtube.videos().list(
+                    part="contentDetails,statistics,snippet",
+                    id=",".join(chunk)
+                ).execute()
+                details_responses.append(details_response)
+            
+            # Flatten items
+            detail_items = []
+            for resp in details_responses:
+                detail_items.extend(resp.get("items", []))
             
             results = []
-            
-            for item in details_response.get("items", []):
+            # 3) Apply outlier/keyword/short-long filters
+            for item in detail_items:
                 video_id = item["id"]
                 snippet = item.get("snippet", {})
                 statistics = item.get("statistics", {})
@@ -202,6 +258,8 @@ def main():
                 published_at = snippet.get("publishedAt", "")
                 
                 # Ensure the keyword is present in the title or description (case insensitive)
+                # This is optional because the "q=keyword" search usually filters. 
+                # We keep it to be extra sure:
                 if keyword.lower() not in title.lower() and keyword.lower() not in description.lower():
                     continue
                 
@@ -240,7 +298,7 @@ def main():
                     "url": f"https://www.youtube.com/watch?v={video_id}"
                 })
             
-            # Sort results based on the selected option
+            # 4) Sort results based on the selected option
             if sort_option == "View Count":
                 results = sorted(results, key=lambda x: x["view_count"], reverse=True)
             else:
@@ -277,7 +335,6 @@ def main():
                         
                         # Thumbnail in first column
                         with cols[0]:
-                            # FIXED: replaced use_column_width with use_container_width
                             st.image(video['thumbnail'], use_container_width=True)
                             
                         # Video details in second column
