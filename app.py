@@ -91,16 +91,17 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Parse ISO 8601 duration to seconds
 def parse_duration(duration_str):
+    """Parse ISO 8601 duration to seconds."""
     try:
+        import isodate
         duration = isodate.parse_duration(duration_str)
         return duration.total_seconds()
     except Exception:
         return 0
 
-# Format large numbers for display
 def format_number(num):
+    """Format large numbers for display."""
     if num >= 1_000_000:
         return f"{num/1_000_000:.1f}M"
     elif num >= 1_000:
@@ -108,8 +109,8 @@ def format_number(num):
     else:
         return str(num)
 
-# Format duration for display
 def format_duration(seconds):
+    """Format duration in seconds to a more readable H/M/S string."""
     minutes, seconds = divmod(seconds, 60)
     hours, minutes = divmod(minutes, 60)
     if hours > 0:
@@ -119,8 +120,8 @@ def format_duration(seconds):
     else:
         return f"{int(seconds)}s"
 
-# Determine the color for the outlier multiplier based on VidIQ's brackets
 def get_outlier_color(multiplier):
+    """Determine the color for the outlier multiplier based on VidIQ's brackets."""
     if multiplier < 2:
         return "black"
     elif multiplier < 5:
@@ -146,15 +147,10 @@ def load_channels(file_path="channels.json"):
     return data.get("channels", [])
 
 def build_card_html(video, channel_avg_views):
-    """Constructs HTML for a single video card."""
+    """Constructs HTML for a single video card. (No description displayed)"""
     color = get_outlier_color(video['outlier_multiplier'])
     outlier_html = f"<span class='outlier-pill' style='background-color:{color};'>{video['outlier_multiplier']:.1f}x</span>"
     avg_views = channel_avg_views.get(video["channel_id"], 0)
-    
-    # Truncate description if too long
-    description = video['description']
-    if len(description) > 150:
-        description = description[:150] + "..."
     
     card_html = f"""
     <div class="video-card">
@@ -169,11 +165,11 @@ def build_card_html(video, channel_avg_views):
             <strong>Outlier Score:</strong> {outlier_html} |
             <strong>Channel Avg:</strong> {format_number(int(avg_views))}
         </div>
-        <div class="video-meta">{description}</div>
         <div class="video-meta">
             <a href="{video['url']}" class="video-link">Watch Video</a>
         </div>
-    </div>"""
+    </div>
+    """
     return card_html
 
 def main():
@@ -312,7 +308,7 @@ def main():
                     "title": title,
                     "channel": channel_title,
                     "channel_id": channel_id,
-                    "description": description,
+                    "description": description,  # We won't display it, but we keep it in the dict
                     "view_count": view_count,
                     "duration": duration_seconds,
                     "outlier_multiplier": multiplier,
@@ -343,22 +339,18 @@ def main():
                 st.markdown(f"<h2>{len(results)}</h2>", unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
-                # Now display the results in a 2-column layout
-                for i in range(0, len(results), 2):
-                    col1, col2 = st.columns(2, gap="large")
+                # Display results in a 3-column layout
+                for i in range(0, len(results), 3):
+                    # Create three columns
+                    columns = st.columns(3, gap="large")
                     
-                    # First video in the row
-                    video1 = results[i]
-                    with col1:
-                        card_html_1 = build_card_html(video1, channel_avg_views)
-                        st.markdown(card_html_1, unsafe_allow_html=True)
-                    
-                    # Second video in the row (if exists)
-                    if i + 1 < len(results):
-                        video2 = results[i + 1]
-                        with col2:
-                            card_html_2 = build_card_html(video2, channel_avg_views)
-                            st.markdown(card_html_2, unsafe_allow_html=True)
+                    # For each column, if a result is available, display the card
+                    for j in range(3):
+                        if i + j < len(results):
+                            video = results[i + j]
+                            with columns[j]:
+                                card_html = build_card_html(video, channel_avg_views)
+                                st.markdown(card_html, unsafe_allow_html=True)
         
         except Exception as e:
             st.error(f"An error occurred: {str(e)}")
