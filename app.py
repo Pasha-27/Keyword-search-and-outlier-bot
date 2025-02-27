@@ -53,7 +53,6 @@ st.markdown("""
     div.block-container {
         padding-top: 1rem;
     }
-    
 </style>
 """, unsafe_allow_html=True)
 
@@ -130,19 +129,11 @@ def main():
         st.write("")
         search_button = st.button("Search Videos")
 
+    # Main title
     st.title("YouTube Video Dashboard")
     
-    # Videos Found metric
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.markdown('<div class="metric-container">', unsafe_allow_html=True)
-        st.markdown("VIDEOS FOUND")
-        st.markdown("<h2>0</h2>", unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.header("Search Results")
-    results_container = st.container()
-    
+    # Search Results Container
+    # We'll only show "Search Results" and "Videos Found" once we have them
     if search_button:
         if not keyword:
             st.sidebar.error("Please enter a search keyword.")
@@ -213,6 +204,7 @@ def main():
                 detail_items.extend(resp.get("items", []))
             
             results = []
+            keyword_lower = keyword.lower()
             for item in detail_items:
                 video_id = item["id"]
                 snippet = item.get("snippet", {})
@@ -221,17 +213,15 @@ def main():
                 
                 title = snippet.get("title", "")
                 description = snippet.get("description", "")
-                # Retrieve tags if available; default to an empty list
                 tags = snippet.get("tags", [])
                 channel_title = snippet.get("channelTitle", "")
                 channel_id = snippet.get("channelId", "")
                 thumbnail = snippet.get("thumbnails", {}).get("high", {}).get("url", "")
                 published_at = snippet.get("publishedAt", "")
                 
-                # Check for keyword in title, description, or any tag (case-insensitive)
-                keyword_lower = keyword.lower()
-                if (keyword_lower not in title.lower() and 
-                    keyword_lower not in description.lower() and 
+                # Check for keyword in title, description, or tags (case-insensitive)
+                if (keyword_lower not in title.lower() and
+                    keyword_lower not in description.lower() and
                     not any(keyword_lower in tag.lower() for tag in tags)):
                     continue
                 
@@ -279,15 +269,16 @@ def main():
             if not results:
                 st.error("No videos match the criteria.")
             else:
-                with col1:
-                    st.markdown('<div class="metric-container">', unsafe_allow_html=True)
-                    st.markdown("VIDEOS FOUND")
-                    st.markdown(f"<h2>{len(results)}</h2>", unsafe_allow_html=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
-                
-                results_container.empty()
+                # Show "Search Results" heading
                 st.header("Search Results")
                 
+                # Show "Videos Found" metric below the heading
+                st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+                st.markdown("VIDEOS FOUND")
+                st.markdown(f"<h2>{len(results)}</h2>", unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                # Now display the actual results
                 for i, video in enumerate(results):
                     with st.expander(f"**{video['title']}**", expanded=True):
                         cols = st.columns([1, 3])
@@ -314,10 +305,12 @@ def main():
                                 st.write("CHANNEL AVG")
                                 avg_views = channel_avg_views.get(video["channel_id"], 0)
                                 st.write(f"**{format_number(int(avg_views))}**")
+                            
                             if len(video['description']) > 150:
                                 st.write(f"{video['description'][:150]}...")
                             else:
                                 st.write(video['description'])
+                            
                             st.write(f"[Watch Video]({video['url']})")
         
         except Exception as e:
