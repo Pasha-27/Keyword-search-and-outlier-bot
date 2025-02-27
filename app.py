@@ -11,7 +11,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Apply custom CSS for dark mode
+# Apply custom CSS for dark mode and hide specific warning
 st.markdown("""
 <style>
     /* Dark mode colors */
@@ -56,6 +56,16 @@ st.markdown("""
     /* Blue text for outlier score */
     .blue-text {
         color: #4c6ef5;
+    }
+    
+    /* Hide the specific deprecation warning */
+    .stWarning [data-testid="stMarkdownContainer"] p:contains("use_column_width") {
+        display: none;
+    }
+    
+    /* Hide all warnings */
+    .stWarning {
+        display: none;
     }
 </style>
 """, unsafe_allow_html=True)
