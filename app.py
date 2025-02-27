@@ -7,7 +7,6 @@ import urllib.parse
 import urllib.error
 import re
 from datetime import datetime, timedelta
-import isodate
 import numpy as np
 from typing import List, Dict, Any
 
@@ -41,10 +40,37 @@ def make_youtube_api_request(endpoint, params, api_key):
         return None
 
 def parse_duration(duration_str: str) -> int:
-    """Parse ISO 8601 duration format to seconds."""
+    """Parse ISO 8601 duration format to seconds without using isodate library."""
     try:
-        return int(isodate.parse_duration(duration_str).total_seconds())
-    except:
+        # Manual parsing of ISO 8601 duration format (e.g., PT1H30M15S)
+        duration_str = duration_str.replace('PT', '')
+        
+        hours = 0
+        minutes = 0
+        seconds = 0
+        
+        # Extract hours
+        if 'H' in duration_str:
+            hour_parts = duration_str.split('H')
+            if hour_parts[0]:
+                hours = int(re.search(r'\d+', hour_parts[0]).group())
+            duration_str = hour_parts[1]
+        
+        # Extract minutes
+        if 'M' in duration_str:
+            minute_parts = duration_str.split('M')
+            if minute_parts[0]:
+                minutes = int(re.search(r'\d+', minute_parts[0]).group())
+            duration_str = minute_parts[1]
+        
+        # Extract seconds
+        if 'S' in duration_str:
+            if duration_str:
+                seconds = int(re.search(r'\d+', duration_str).group())
+        
+        return hours * 3600 + minutes * 60 + seconds
+    except Exception as e:
+        st.warning(f"Error parsing duration: {duration_str}")
         return 0
 
 def calculate_outlier_score(video_data: Dict[str, Any]) -> float:
