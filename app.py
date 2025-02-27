@@ -61,22 +61,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Custom formula for outlier score calculation
-def calculate_outlier_score(view_count, like_count, duration_seconds):
-    # Enhanced formula with additional factors
-    duration_minutes = duration_seconds / 60.0
-    
-    # Base score using views and likes (with log scaling)
-    base_score = (math.log(view_count + 1) * 1.5 + math.log(like_count + 1) * 2) 
-    
-    # Duration factor - shorter videos get higher scores
-    duration_factor = math.exp(-duration_minutes / 30) * 5  # exponential decay
-    
-    # Final score
-    final_score = base_score * (0.8 + duration_factor * 0.2)
-    
-    return final_score
-
 # Parse ISO 8601 duration to seconds
 def parse_duration(duration_str):
     try:
@@ -98,7 +82,6 @@ def format_number(num):
 def format_duration(seconds):
     minutes, seconds = divmod(seconds, 60)
     hours, minutes = divmod(minutes, 60)
-    
     if hours > 0:
         return f"{int(hours)}h {int(minutes)}m {int(seconds)}s"
     elif minutes > 0:
@@ -106,20 +89,25 @@ def format_duration(seconds):
     else:
         return f"{int(seconds)}s"
 
+# Determine the color for the outlier multiplier based on VidIQ's brackets
+def get_outlier_color(multiplier):
+    if multiplier < 2:
+        return "black"
+    elif multiplier < 5:
+        return "#4c6ef5"  # blue
+    elif multiplier < 10:
+        return "purple"
+    else:
+        return "red"
+
 def load_channels(file_path="channels.json"):
     """
     Loads channel data from a JSON file.
-    The file is expected to have a structure like:
+    Expected JSON format:
     {
       "channels": [
-        {
-          "id": "UCabc123",
-          "name": "Finance Guru"
-        },
-        {
-          "id": "UCdef456",
-          "name": "Money Matters"
-        }
+        {"id": "CHANNEL_ID", "name": "Channel Name"},
+        ...
       ]
     }
     """
@@ -132,35 +120,20 @@ def main():
     with st.sidebar:
         st.title("YouTube Search")
         st.write("")
-        
-        # Input for search keyword
         st.markdown("SEARCH KEYWORD")
         keyword = st.text_input("", placeholder="Enter keyword...", label_visibility="collapsed")
-        
         st.write("")
-        
-        # Video type filter
         st.markdown("VIDEO TYPE")
         video_type = st.selectbox("", options=["All", "Short (< 3 mins)", "Long (>= 3 mins)"], label_visibility="collapsed")
-        
         st.write("")
-        
-        # Sorting option
         st.markdown("SORT BY")
         sort_option = st.selectbox("", options=["Outlier Score", "View Count"], label_visibility="collapsed")
-        
         st.write("")
-        
-        # Minimum outlier score
-        st.markdown("MINIMUM OUTLIER SCORE")
-        min_outlier_score = st.slider("", min_value=0.0, max_value=10.0, value=5.0, step=0.1, label_visibility="collapsed")
-        
+        st.markdown("MINIMUM OUTLIER MULTIPLIER")
+        min_outlier_multiplier = st.slider("", min_value=0.0, max_value=20.0, value=2.0, step=0.1, label_visibility="collapsed")
         st.write("")
-        
-        # Search button
         search_button = st.button("Search Videos")
 
-    # Main content area
     st.title("YouTube Video Dashboard")
     
     # Videos Found metric
@@ -171,7 +144,6 @@ def main():
         st.markdown("<h2>0</h2>", unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # Results section
     st.header("Search Results")
     results_container = st.container()
     
@@ -180,57 +152,59 @@ def main():
             st.sidebar.error("Please enter a search keyword.")
             return
         
-        # Information message while searching
         search_info = st.empty()
         search_info.info("Searching for videos in Finance channels...")
         
         try:
-            # Get YouTube API key from Streamlit secrets
             API_KEY = st.secrets["YOUTUBE_API_KEY"]
             youtube = build("youtube", "v3", developerKey=API_KEY)
             
-            # Load finance channels from local JSON
+            # Load channels from JSON (only finance channels)
             channels = load_channels("channels.json")
             if not channels:
                 search_info.error("No channels found in channels.json. Please update your file.")
                 return
             
-            all_video_ids = []
-            channel_video_map = {}  # Map channel_id -> list of video items from search
-            
-            # 1) Search each channel individually
+            # Get each channel's average views (total_views / total_videos)
+            channel_avg_views = {}
             for ch in channels:
                 channel_id = ch["id"]
-                channel_name = ch.get("name", "Unknown Channel")
-                
-                # Query the channel with the given keyword
+                channel_response = youtube.channels().list(
+                    part="statistics",
+                    id=channel_id
+                ).execute()
+                if channel_response.get("items"):
+                    stats = channel_response["items"][0]["statistics"]
+                    total_views = int(stats.get("viewCount", 0))
+                    total_videos = int(stats.get("videoCount", 0))
+                    avg_views = total_views / total_videos if total_videos > 0 else 0
+                    channel_avg_views[channel_id] = avg_views
+                else:
+                    channel_avg_views[channel_id] = 0
+            
+            all_video_ids = []
+            # Search for videos channel by channel
+            for ch in channels:
+                channel_id = ch["id"]
                 search_response = youtube.search().list(
                     part="snippet",
                     q=keyword,
-                    channelId=channel_id,  # Restrict search to this channel
+                    channelId=channel_id,
                     type="video",
                     maxResults=50
                 ).execute()
-                
                 items = search_response.get("items", [])
-                # Store results in a dict for later
-                channel_video_map[channel_id] = items
-                # Collect all video IDs
                 all_video_ids.extend([item["id"]["videoId"] for item in items])
             
             if not all_video_ids:
-                search_info.error("No videos found across all listed channels.")
+                search_info.error("No videos found across the listed channels.")
                 return
             
-            # 2) Retrieve details for all collected video IDs
-            #    If there are more than 50 IDs, we need to chunk them.
-            #    For simplicity, let's chunk in sets of 50.
+            # Retrieve details in chunks of 50
             details_responses = []
-            
             def chunk_list(lst, size=50):
                 for i in range(0, len(lst), size):
                     yield lst[i : i + size]
-            
             for chunk in chunk_list(all_video_ids, 50):
                 details_response = youtube.videos().list(
                     part="contentDetails,statistics,snippet",
@@ -238,13 +212,11 @@ def main():
                 ).execute()
                 details_responses.append(details_response)
             
-            # Flatten items
             detail_items = []
             for resp in details_responses:
                 detail_items.extend(resp.get("items", []))
             
             results = []
-            # 3) Apply outlier/keyword/short-long filters
             for item in detail_items:
                 video_id = item["id"]
                 snippet = item.get("snippet", {})
@@ -254,30 +226,27 @@ def main():
                 title = snippet.get("title", "")
                 description = snippet.get("description", "")
                 channel_title = snippet.get("channelTitle", "")
+                channel_id = snippet.get("channelId", "")
                 thumbnail = snippet.get("thumbnails", {}).get("high", {}).get("url", "")
                 published_at = snippet.get("publishedAt", "")
                 
-                # Ensure the keyword is present in the title or description (case insensitive)
-                # This is optional because the "q=keyword" search usually filters. 
-                # We keep it to be extra sure:
+                # Extra check for keyword in title/description
                 if keyword.lower() not in title.lower() and keyword.lower() not in description.lower():
                     continue
                 
-                # Get view and like counts
                 view_count = int(statistics.get("viewCount", 0))
-                like_count = int(statistics.get("likeCount", 0)) if "likeCount" in statistics else 0
-                comment_count = int(statistics.get("commentCount", 0)) if "commentCount" in statistics else 0
+                # Use channel's average views to compute outlier multiplier
+                if channel_id in channel_avg_views and channel_avg_views[channel_id] > 0:
+                    multiplier = view_count / channel_avg_views[channel_id]
+                else:
+                    multiplier = 0
                 
-                # Get the video duration in seconds
-                duration_str = contentDetails.get("duration", "PT0S")
-                duration_seconds = parse_duration(duration_str)
-                
-                # Calculate the outlier score
-                outlier_score = calculate_outlier_score(view_count, like_count, duration_seconds)
-                if outlier_score <= min_outlier_score:
+                if multiplier <= min_outlier_multiplier:
                     continue
                 
-                # Apply the video type filter
+                # Video duration filter
+                duration_str = contentDetails.get("duration", "PT0S")
+                duration_seconds = parse_duration(duration_str)
                 if video_type == "Short (< 3 mins)" and duration_seconds >= 180:
                     continue
                 if video_type == "Long (>= 3 mins)" and duration_seconds < 180:
@@ -287,86 +256,63 @@ def main():
                     "video_id": video_id,
                     "title": title,
                     "channel": channel_title,
+                    "channel_id": channel_id,
                     "description": description,
                     "view_count": view_count,
-                    "like_count": like_count,
-                    "comment_count": comment_count,
                     "duration": duration_seconds,
-                    "outlier_score": outlier_score,
+                    "outlier_multiplier": multiplier,
                     "thumbnail": thumbnail,
-                    "published_at": published_at[:10],  # Just the date part
+                    "published_at": published_at[:10],
                     "url": f"https://www.youtube.com/watch?v={video_id}"
                 })
             
-            # 4) Sort results based on the selected option
+            # Sort results based on the chosen sort option
             if sort_option == "View Count":
                 results = sorted(results, key=lambda x: x["view_count"], reverse=True)
             else:
-                results = sorted(results, key=lambda x: x["outlier_score"], reverse=True)
+                results = sorted(results, key=lambda x: x["outlier_multiplier"], reverse=True)
             
-            # Show only the top 10 videos
             results = results[:10]
-            
-            # Remove the search info message
             search_info.empty()
             
             if not results:
                 st.error("No videos match the criteria.")
             else:
-                # Update the videos found metric
                 with col1:
                     st.markdown('<div class="metric-container">', unsafe_allow_html=True)
                     st.markdown("VIDEOS FOUND")
                     st.markdown(f"<h2>{len(results)}</h2>", unsafe_allow_html=True)
                     st.markdown('</div>', unsafe_allow_html=True)
                 
-                # Clear the existing results container
                 results_container.empty()
-                
-                # Re-establish the container with the header
                 st.header("Search Results")
                 
-                # Display each video using pure Streamlit components
                 for i, video in enumerate(results):
-                    # Create a colored background with st.expander
                     with st.expander(f"**{video['title']}**", expanded=True):
-                        # Layout with columns
                         cols = st.columns([1, 3])
-                        
-                        # Thumbnail in first column
                         with cols[0]:
                             st.image(video['thumbnail'], use_container_width=True)
-                            
-                        # Video details in second column
                         with cols[1]:
-                            # Channel and date
                             st.write(f"{video['channel']} • {video['published_at']}")
-                            
-                            # Video stats
                             stat_cols = st.columns(4)
                             with stat_cols[0]:
                                 st.write("VIEWS")
                                 st.write(f"**{format_number(video['view_count'])}**")
-                            
                             with stat_cols[1]:
-                                st.write("LIKES")
-                                st.write(f"**{format_number(video['like_count'])}**")
-                            
-                            with stat_cols[2]:
                                 st.write("DURATION")
                                 st.write(f"**{format_duration(video['duration'])}**")
-                            
-                            with stat_cols[3]:
+                            with stat_cols[2]:
                                 st.write("OUTLIER SCORE")
-                                st.markdown(f"<span class='blue-text'><b>{video['outlier_score']:.1f}</b></span>", unsafe_allow_html=True)
-                            
-                            # Description
+                                color = get_outlier_color(video['outlier_multiplier'])
+                                st.markdown(f"<span style='color: {color};'><b>{video['outlier_multiplier']:.1f}x</b></span>", unsafe_allow_html=True)
+                            with stat_cols[3]:
+                                st.write("CHANNEL AVG")
+                                avg_views = channel_avg_views.get(video["channel_id"], 0)
+                                st.write(f"**{format_number(int(avg_views))}**")
                             if len(video['description']) > 150:
                                 st.write(f"{video['description'][:150]}...")
                             else:
                                 st.write(video['description'])
-                                
-                            # Link to video
                             st.write(f"[Watch Video]({video['url']})")
         
         except Exception as e:
