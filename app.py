@@ -6,7 +6,7 @@ from googleapiclient.discovery import build
 
 # Set page configuration for dark mode
 st.set_page_config(
-    page_title="YouTube Video Search Dashboard",
+    page_title="YouTube God's eye Dashboard",
     page_icon="🎬",
     layout="wide",
     initial_sidebar_state="expanded"
