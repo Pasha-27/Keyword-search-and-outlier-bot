@@ -1,6 +1,5 @@
 import streamlit as st
 import math
-import isodate
 import json
 from googleapiclient.discovery import build
 
@@ -59,7 +58,7 @@ st.markdown("""
         background-color: #1e2538;
         border-radius: 10px;
         padding: 1rem;
-        margin-bottom: 1rem;
+        margin-bottom: 0.3rem; /* Reduced from 1rem to 0.3rem */
     }
     .video-thumbnail {
         width: 100%;
@@ -91,10 +90,11 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+import isodate
+
 def parse_duration(duration_str):
     """Parse ISO 8601 duration to seconds."""
     try:
-        import isodate
         duration = isodate.parse_duration(duration_str)
         return duration.total_seconds()
     except Exception:
@@ -308,7 +308,7 @@ def main():
                     "title": title,
                     "channel": channel_title,
                     "channel_id": channel_id,
-                    "description": description,  # We won't display it, but we keep it in the dict
+                    "description": description,  # Not displayed in the card
                     "view_count": view_count,
                     "duration": duration_seconds,
                     "outlier_multiplier": multiplier,
@@ -339,10 +339,10 @@ def main():
                 st.markdown(f"<h2>{len(results)}</h2>", unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
-                # Display results in a 3-column layout
+                # Display results in a 3-column layout with a smaller gap
                 for i in range(0, len(results), 3):
-                    # Create three columns
-                    columns = st.columns(3, gap="large")
+                    # Create three columns with smaller gap
+                    columns = st.columns(3, gap="small")
                     
                     # For each column, if a result is available, display the card
                     for j in range(3):
