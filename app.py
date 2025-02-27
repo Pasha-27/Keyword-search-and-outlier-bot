@@ -20,13 +20,8 @@ st.markdown("""
         color: #fafafa;
     }
     
-    /* Sidebar styling */
-    section[data-testid="stSidebar"] {
-        background-color: #1e2538;
-    }
-    
-    /* Button styling */
-    .stButton>button {
+    /* Card styling */
+    div.stButton > button {
         background-color: #4c6ef5;
         color: white;
         border: none;
@@ -36,8 +31,31 @@ st.markdown("""
         width: 100%;
     }
     
-    .stButton>button:hover {
+    div.stButton > button:hover {
         background-color: #364fc7;
+    }
+    
+    /* Fix background for sidebar */
+    [data-testid=stSidebar] {
+        background-color: #1e2538;
+    }
+    
+    /* Metric container */
+    .metric-container {
+        background-color: #1e2538;
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+    
+    /* Remove padding from containers */
+    div.block-container {
+        padding-top: 1rem;
+    }
+    
+    /* Blue text for outlier score */
+    .blue-text {
+        color: #4c6ef5;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -90,55 +108,49 @@ def format_duration(seconds):
 def main():
     # Sidebar for inputs
     with st.sidebar:
-        st.markdown("<h1 style='text-align: center; color: white;'>YouTube Search</h1>", unsafe_allow_html=True)
-        st.markdown("<div style='height: 20px'></div>", unsafe_allow_html=True)
+        st.title("YouTube Search")
+        st.write("")
         
         # Input for search keyword
-        st.markdown("<p style='color: #adb5bd;'>SEARCH KEYWORD</p>", unsafe_allow_html=True)
+        st.markdown("SEARCH KEYWORD")
         keyword = st.text_input("", placeholder="Enter keyword...", label_visibility="collapsed")
         
-        st.markdown("<div style='height: 20px'></div>", unsafe_allow_html=True)
+        st.write("")
         
         # Video type filter
-        st.markdown("<p style='color: #adb5bd;'>VIDEO TYPE</p>", unsafe_allow_html=True)
+        st.markdown("VIDEO TYPE")
         video_type = st.selectbox("", options=["All", "Short (< 3 mins)", "Long (>= 3 mins)"], label_visibility="collapsed")
         
-        st.markdown("<div style='height: 20px'></div>", unsafe_allow_html=True)
+        st.write("")
         
         # Sorting option
-        st.markdown("<p style='color: #adb5bd;'>SORT BY</p>", unsafe_allow_html=True)
+        st.markdown("SORT BY")
         sort_option = st.selectbox("", options=["Outlier Score", "View Count"], label_visibility="collapsed")
         
-        st.markdown("<div style='height: 20px'></div>", unsafe_allow_html=True)
+        st.write("")
         
         # Minimum outlier score
-        st.markdown("<p style='color: #adb5bd;'>MINIMUM OUTLIER SCORE</p>", unsafe_allow_html=True)
+        st.markdown("MINIMUM OUTLIER SCORE")
         min_outlier_score = st.slider("", min_value=0.0, max_value=10.0, value=5.0, step=0.1, label_visibility="collapsed")
         
-        st.markdown("<div style='height: 30px'></div>", unsafe_allow_html=True)
+        st.write("")
         
         # Search button
         search_button = st.button("Search Videos")
 
     # Main content area
-    st.markdown("<h1 style='color: white;'>YouTube Video Dashboard</h1>", unsafe_allow_html=True)
+    st.title("YouTube Video Dashboard")
     
-    # Single metric container for videos found
-    metric_container = st.container()
-    with metric_container:
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.markdown("""
-            <div style="background-color: #1e2538; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
-                <p style="color: #adb5bd; font-size: 14px; margin-bottom: 5px;">VIDEOS FOUND</p>
-                <p style="font-size: 24px; font-weight: bold; margin-top: 0;">0</p>
-            </div>
-            """, unsafe_allow_html=True)
+    # Videos Found metric
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+        st.markdown("VIDEOS FOUND")
+        st.markdown("<h2>0</h2>", unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
     
-    # Results section header
-    st.markdown("<h2 style='margin-top: 30px;'>Search Results</h2>", unsafe_allow_html=True)
-    
-    # Results container
+    # Results section
+    st.header("Search Results")
     results_container = st.container()
     
     if search_button:
@@ -147,8 +159,8 @@ def main():
             return
         
         # Information message while searching
-        with results_container:
-            search_info = st.info("Searching for videos...")
+        search_info = st.empty()
+        search_info.info("Searching for videos...")
         
         try:
             # Get YouTube API key from Streamlit secrets
@@ -241,74 +253,66 @@ def main():
             search_info.empty()
             
             if not results:
-                with results_container:
-                    st.error("No videos match the criteria.")
+                st.error("No videos match the criteria.")
             else:
                 # Update the videos found metric
-                with metric_container:
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.markdown(f"""
-                        <div style="background-color: #1e2538; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
-                            <p style="color: #adb5bd; font-size: 14px; margin-bottom: 5px;">VIDEOS FOUND</p>
-                            <p style="font-size: 24px; font-weight: bold; margin-top: 0;">{len(results)}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
+                with col1:
+                    st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+                    st.markdown("VIDEOS FOUND")
+                    st.markdown(f"<h2>{len(results)}</h2>", unsafe_allow_html=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
                 
-                # Display results using pure Streamlit components
-                with results_container:
-                    for video in results:
-                        # Create a container for each video
-                        video_container = st.container()
-                        with video_container:
-                            # Apply styling to the container
-                            st.markdown("""
-                            <div style="background-color: #1e2538; border-radius: 10px; padding: 5px; margin-bottom: 20px;">
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                            # Create two columns for thumbnail and content
-                            col1, col2 = st.columns([1, 3])
-                            
-                            with col1:
-                                # Display thumbnail
-                                st.image(video['thumbnail'], use_column_width=True)
-                            
-                            with col2:
-                                # Title with link
-                                st.markdown(f"### [{video['title']}]({video['url']})")
-                                
-                                # Channel and date
-                                st.markdown(f"**{video['channel']}** • {video['published_at']}")
-                                
-                                # Metrics in columns
-                                metric_cols = st.columns(4)
-                                with metric_cols[0]:
-                                    st.markdown("**VIEWS**")
-                                    st.markdown(f"{format_number(video['view_count'])}")
-                                    
-                                with metric_cols[1]:
-                                    st.markdown("**LIKES**")
-                                    st.markdown(f"{format_number(video['like_count'])}")
-                                    
-                                with metric_cols[2]:
-                                    st.markdown("**DURATION**")
-                                    st.markdown(f"{format_duration(video['duration'])}")
-                                    
-                                with metric_cols[3]:
-                                    st.markdown("**OUTLIER SCORE**")
-                                    st.markdown(f"<span style='color: #4c6ef5; font-weight: bold;'>{video['outlier_score']:.1f}</span>", unsafe_allow_html=True)
-                                
-                                # Description
-                                if len(video['description']) > 150:
-                                    desc = video['description'][:150] + "..."
-                                else:
-                                    desc = video['description']
-                                st.markdown(desc)
+                # Clear the existing results container
+                results_container.empty()
                 
+                # Re-establish the container with the header
+                st.header("Search Results")
+                
+                # Display each video using pure Streamlit components
+                for i, video in enumerate(results):
+                    # Create a colored background with st.expander
+                    with st.expander(f"**{video['title']}**", expanded=True):
+                        # Layout with columns
+                        cols = st.columns([1, 3])
+                        
+                        # Thumbnail in first column
+                        with cols[0]:
+                            st.image(video['thumbnail'], use_column_width=True)
+                            
+                        # Video details in second column
+                        with cols[1]:
+                            # Channel and date
+                            st.write(f"{video['channel']} • {video['published_at']}")
+                            
+                            # Video stats
+                            stat_cols = st.columns(4)
+                            with stat_cols[0]:
+                                st.write("VIEWS")
+                                st.write(f"**{format_number(video['view_count'])}**")
+                            
+                            with stat_cols[1]:
+                                st.write("LIKES")
+                                st.write(f"**{format_number(video['like_count'])}**")
+                            
+                            with stat_cols[2]:
+                                st.write("DURATION")
+                                st.write(f"**{format_duration(video['duration'])}**")
+                            
+                            with stat_cols[3]:
+                                st.write("OUTLIER SCORE")
+                                st.markdown(f"<span class='blue-text'><b>{video['outlier_score']:.1f}</b></span>", unsafe_allow_html=True)
+                            
+                            # Description
+                            if len(video['description']) > 150:
+                                st.write(f"{video['description'][:150]}...")
+                            else:
+                                st.write(video['description'])
+                                
+                            # Link to video
+                            st.write(f"[Watch Video]({video['url']})")
+        
         except Exception as e:
-            with results_container:
-                search_info.error(f"An error occurred: {str(e)}")
+            st.error(f"An error occurred: {str(e)}")
 
 if __name__ == "__main__":
     main()
