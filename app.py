@@ -88,11 +88,6 @@ st.markdown("""
         text-decoration: none;
         font-weight: bold;
     }
-    .comment-section {
-        margin-top: 0.8rem;
-        border-top: 1px solid #2d3748;
-        padding-top: 0.5rem;
-    }
     .comment-card {
         background-color: #13192a;
         border-radius: 8px;
@@ -114,11 +109,16 @@ st.markdown("""
         color: #a0aec0;
         font-size: 0.8rem;
     }
-    .comments-toggle {
-        cursor: pointer;
-        color: #4c6ef5;
-        font-weight: bold;
-        font-size: 0.9rem;
+    
+    /* Style Streamlit's expander to match our theme */
+    .streamlit-expanderHeader {
+        background-color: #1e2538 !important;
+        color: #4c6ef5 !important;
+        font-weight: bold !important;
+    }
+    .streamlit-expanderContent {
+        background-color: #1e2538 !important;
+        border: none !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -194,9 +194,23 @@ def fetch_top_comments(youtube, video_id, max_comments=5):
         comments = []
         for item in comment_response.get("items", []):
             comment = item["snippet"]["topLevelComment"]["snippet"]
+            
+            # Get the plain text version of the comment (remove HTML)
+            text_display = comment["textDisplay"]
+            
+            # Create a safe version of the text by escaping HTML
+            import html
+            text_safe = html.escape(text_display)
+            
+            # Clean up any remaining HTML or entities
+            import re
+            text_safe = re.sub(r'<[^>]*>', '', text_safe)
+            text_safe = text_safe.replace('&nbsp;', ' ')
+            
             comments.append({
-                "author": comment["authorDisplayName"],
-                "text": comment["textDisplay"],
+                "author": html.escape(comment["authorDisplayName"]),
+                "text": text_display,
+                "text_safe": text_safe,
                 "like_count": comment.get("likeCount", 0),
                 "published_at": comment["publishedAt"][:10]
             })
@@ -206,84 +220,55 @@ def fetch_top_comments(youtube, video_id, max_comments=5):
         return comments
     except Exception as e:
         # Comments might be disabled for the video
+        st.error(f"Error fetching comments: {str(e)}")
         return []
 
-def build_card_html(video, channel_avg_views, show_comments=True):
-    """Constructs HTML for a single video card, including Engagement Rate and Comments."""
+def build_video_card(col, video, channel_avg_views, show_comments=True):
+    """Builds a video card with Streamlit components instead of HTML."""
     color = get_outlier_color(video['outlier_multiplier'])
-    outlier_html = f"<span class='outlier-pill' style='background-color:{color};'>{video['outlier_multiplier']:.1f}x</span>"
     avg_views = channel_avg_views.get(video["channel_id"], 0)
     
-    card_html = f"""
-    <div class="video-card">
-        <img src="{video['thumbnail']}" class="video-thumbnail" />
-        <div class="video-title">{video['title']}</div>
-        <div class="video-meta">{video['channel']} • {video['published_at']}</div>
-        <div class="video-meta">
-            <strong>Views:</strong> {format_number(video['view_count'])} |
-            <strong>Duration:</strong> {format_duration(video['duration'])}
-        </div>
-        <div class="video-meta">
-            <strong>Outlier Score:</strong> {outlier_html} |
-            <strong>Channel Avg:</strong> {format_number(int(avg_views))}
-        </div>
-        <div class="video-meta">
-            <strong>Engagement Rate:</strong> {video['engagement_rate']:.1f}%
-        </div>
-        <div class="video-meta">
-            <a href="{video['url']}" class="video-link">Watch Video</a>
-        </div>
-    """
-    
-    # Add comments section if available
-    if show_comments and video.get('top_comments'):
-        comment_id = f"comments-{video['video_id']}"
-        card_html += f"""
-        <div class="comment-section">
-            <div class="comments-toggle" onclick="toggleComments('{comment_id}')">
-                📝 Top Comments ({len(video['top_comments'])})
+    with col:
+        st.markdown(f"""
+        <div class="video-card">
+            <img src="{video['thumbnail']}" class="video-thumbnail" />
+            <div class="video-title">{video['title']}</div>
+            <div class="video-meta">{video['channel']} • {video['published_at']}</div>
+            <div class="video-meta">
+                <strong>Views:</strong> {format_number(video['view_count'])} |
+                <strong>Duration:</strong> {format_duration(video['duration'])}
             </div>
-            <div id="{comment_id}" style="display: block;">
-        """
+            <div class="video-meta">
+                <strong>Outlier Score:</strong> <span class='outlier-pill' style='background-color:{color};'>{video['outlier_multiplier']:.1f}x</span> |
+                <strong>Channel Avg:</strong> {format_number(int(avg_views))}
+            </div>
+            <div class="video-meta">
+                <strong>Engagement Rate:</strong> {video['engagement_rate']:.1f}%
+            </div>
+            <div class="video-meta">
+                <a href="{video['url']}" class="video-link" target="_blank">Watch Video</a>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
         
-        for comment in video['top_comments']:
-            card_html += f"""
-            <div class="comment-card">
-                <div class="comment-author">{comment['author']}</div>
-                <div class="comment-text">{comment['text']}</div>
-                <div class="comment-likes">❤️ {format_number(comment['like_count'])} likes • {comment['published_at']}</div>
-            </div>
-            """
-            
-        card_html += """
-            </div>
-        </div>
-        """
-    elif show_comments:
-        card_html += """
-        <div class="comment-section">
-            <div class="comments-meta">No comments available</div>
-        </div>
-        """
-        
-    card_html += "</div>"
-    
-    return card_html
+        # Add comments section using Streamlit native components
+        if show_comments:
+            if video.get('top_comments'):
+                with st.expander(f"📝 Top Comments ({len(video['top_comments'])})"):
+                    for comment in video['top_comments']:
+                        st.markdown(f"""
+                        <div class="comment-card">
+                            <div class="comment-author">{comment['author']}</div>
+                            <div class="comment-text">{comment['text_safe']}</div>
+                            <div class="comment-likes">❤️ {format_number(comment['like_count'])} likes • {comment['published_at']}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="comments-meta">No comments available</div>', unsafe_allow_html=True)
 
 def main():
-    # Add JavaScript for toggling comments
-    st.markdown("""
-    <script>
-    function toggleComments(id) {
-        var element = document.getElementById(id);
-        if (element.style.display === "none") {
-            element.style.display = "block";
-        } else {
-            element.style.display = "none";
-        }
-    }
-    </script>
-    """, unsafe_allow_html=True)
+    # We can't use custom JavaScript in Streamlit
+    # So instead we'll use Streamlit's built-in components for toggling
     
     # Sidebar for inputs
     with st.sidebar:
@@ -488,9 +473,7 @@ def main():
                     for j in range(3):
                         if i + j < len(results):
                             video = results[i + j]
-                            card_html = build_card_html(video, channel_avg_views, show_comments)
-                            with columns[j]:
-                                st.markdown(card_html, unsafe_allow_html=True)
+                            build_video_card(columns[j], video, channel_avg_views, show_comments)
         
         except Exception as e:
             st.error(f"An error occurred: {str(e)}")
