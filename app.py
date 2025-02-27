@@ -177,10 +177,11 @@ def load_channels(file_path="channels.json"):
         data = json.load(f)
     return data.get("channels", [])
 
-def fetch_top_comments(youtube, video_id, max_comments=5):
+def fetch_top_comments(youtube, video_id, video_title, max_comments=5):
     """
     Fetches the top comments for a video by like count.
     Returns a list of the top comments with author, text, and like count.
+    Logs the number of comments fetched with video title for identification.
     """
     try:
         # Fetch comments
@@ -217,10 +218,15 @@ def fetch_top_comments(youtube, video_id, max_comments=5):
         
         # Sort by like count and get top max_comments
         comments = sorted(comments, key=lambda x: x["like_count"], reverse=True)[:max_comments]
+        
+        # Log the number of comments fetched with video title for identification
+        truncated_title = video_title[:50] + "..." if len(video_title) > 50 else video_title
+        st.write(f"📊 Fetched {len(comments)} comments for video: '{truncated_title}'")
+        
         return comments
     except Exception as e:
         # Comments might be disabled for the video
-        st.error(f"Error fetching comments: {str(e)}")
+        st.error(f"Error fetching comments for '{video_title[:30]}...': {str(e)}")
         return []
 
 def build_video_card(col, video, channel_avg_views, show_comments=True):
