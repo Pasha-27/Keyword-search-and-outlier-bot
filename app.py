@@ -1,7 +1,10 @@
 import streamlit as st
-import googleapiclient.discovery
-import googleapiclient.errors
 import pandas as pd
+import os
+import json
+import urllib.request
+import urllib.parse
+import urllib.error
 import re
 from datetime import datetime, timedelta
 import isodate
@@ -15,11 +18,27 @@ st.set_page_config(
     layout="wide"
 )
 
-# Cache the API client to avoid creating it multiple times
-@st.cache_resource
-def get_youtube_client(api_key):
-    """Create and cache a YouTube API client."""
-    return googleapiclient.discovery.build("youtube", "v3", developerKey=api_key)
+# Function to make direct API calls to YouTube
+def make_youtube_api_request(endpoint, params, api_key):
+    """Make a direct request to the YouTube Data API v3."""
+    base_url = "https://www.googleapis.com/youtube/v3/"
+    params['key'] = api_key
+    
+    # Construct the URL
+    query_string = urllib.parse.urlencode(params)
+    url = f"{base_url}{endpoint}?{query_string}"
+    
+    try:
+        # Make the request
+        with urllib.request.urlopen(url) as response:
+            return json.loads(response.read().decode('utf-8'))
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8')
+        st.error(f"YouTube API error: {e.code} - {error_body}")
+        return None
+    except Exception as e:
+        st.error(f"An error occurred: {str(e)}")
+        return None
 
 def parse_duration(duration_str: str) -> int:
     """Parse ISO 8601 duration format to seconds."""
@@ -83,67 +102,65 @@ def calculate_outlier_score(video_data: Dict[str, Any]) -> float:
     
     return round(outlier_score, 2)
 
-def get_channel_statistics(youtube, channel_id: str) -> Dict[str, Any]:
+def get_channel_statistics(api_key, channel_id: str) -> int:
     """Get channel statistics including subscriber count."""
-    try:
-        request = youtube.channels().list(
-            part="statistics",
-            id=channel_id
-        )
-        response = request.execute()
-        
-        if response.get("items"):
-            return int(response["items"][0]["statistics"].get("subscriberCount", 0))
-        return 0
-    except:
-        return 0
-
-def search_youtube(youtube, keyword: str, max_results: int = 50) -> List[Dict[str, Any]]:
-    """Search YouTube for videos matching a keyword."""
-    try:
-        # Search for videos
-        search_request = youtube.search().list(
-            q=keyword,
-            part="id,snippet",
-            maxResults=max_results,
-            type="video"
-        )
-        search_response = search_request.execute()
-        
-        # Extract video IDs
-        video_ids = [item["id"]["videoId"] for item in search_response.get("items", [])]
-        
-        if not video_ids:
-            return []
-        
-        # Get detailed video information
-        videos_request = youtube.videos().list(
-            id=",".join(video_ids),
-            part="snippet,contentDetails,statistics"
-        )
-        videos_response = videos_request.execute()
-        
-        # Process videos
-        videos = []
-        for video in videos_response.get("items", []):
-            # Get channel subscribers
-            channel_id = video["snippet"]["channelId"]
-            subscriber_count = get_channel_statistics(youtube, channel_id)
-            
-            # Add subscriber count to video data
-            video["channel_subscribers"] = subscriber_count
-            
-            # Add video to list
-            videos.append(video)
-        
-        return videos
+    params = {
+        'part': 'statistics',
+        'id': channel_id
+    }
     
-    except googleapiclient.errors.HttpError as e:
-        st.error(f"YouTube API error: {e}")
+    response = make_youtube_api_request('channels', params, api_key)
+    
+    if response and response.get("items"):
+        return int(response["items"][0]["statistics"].get("subscriberCount", 0))
+    return 0
+
+def search_youtube(api_key, keyword: str, max_results: int = 50) -> List[Dict[str, Any]]:
+    """Search YouTube for videos matching a keyword."""
+    # Search for videos
+    search_params = {
+        'q': keyword,
+        'part': 'id,snippet',
+        'maxResults': max_results,
+        'type': 'video'
+    }
+    
+    search_response = make_youtube_api_request('search', search_params, api_key)
+    
+    if not search_response or not search_response.get("items"):
         return []
-    except Exception as e:
-        st.error(f"An error occurred: {e}")
+    
+    # Extract video IDs
+    video_ids = [item["id"]["videoId"] for item in search_response.get("items", [])]
+    
+    if not video_ids:
         return []
+    
+    # Get detailed video information
+    videos_params = {
+        'id': ','.join(video_ids),
+        'part': 'snippet,contentDetails,statistics'
+    }
+    
+    videos_response = make_youtube_api_request('videos', videos_params, api_key)
+    
+    if not videos_response or not videos_response.get("items"):
+        return []
+    
+    # Process videos
+    videos = []
+    for video in videos_response.get("items", []):
+        # Get channel subscribers
+        channel_id = video["snippet"]["channelId"]
+        subscriber_count = get_channel_statistics(api_key, channel_id)
+        
+        # Add subscriber count to video data
+        video["channel_subscribers"] = subscriber_count
+        
+        # Add video to list
+        videos.append(video)
+    
+    return videos
 
 def main():
     st.title("YouTube Search with Outlier Score")
@@ -185,14 +202,11 @@ def main():
         st.info("Enter a search keyword in the sidebar to find videos.")
         return
     
-    # Initialize YouTube API client
-    youtube = get_youtube_client(api_key)
-    
     # Search button
     if st.button("Search Videos"):
         with st.spinner("Searching YouTube videos..."):
             # Search YouTube
-            videos = search_youtube(youtube, keyword)
+            videos = search_youtube(api_key, keyword)
             
             if not videos:
                 st.warning("No videos found. Try a different keyword.")
