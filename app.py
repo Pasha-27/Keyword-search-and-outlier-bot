@@ -53,6 +53,41 @@ st.markdown("""
     div.block-container {
         padding-top: 1rem;
     }
+
+    /* Card container style */
+    .video-card {
+        background-color: #1e2538;
+        border-radius: 10px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    .video-thumbnail {
+        width: 100%;
+        border-radius: 5px;
+        margin-bottom: 0.5rem;
+    }
+    .video-title {
+        color: #fafafa;
+        margin-bottom: 0.5rem;
+        font-weight: bold;
+        font-size: 1.1rem;
+    }
+    .video-meta {
+        color: #fafafa;
+        margin-bottom: 0.2rem;
+        font-size: 0.9rem;
+    }
+    .outlier-pill {
+        color: white;
+        border-radius: 12px;
+        padding: 5px 10px;
+        font-weight: bold;
+    }
+    .video-link {
+        color: #4c6ef5;
+        text-decoration: none;
+        font-weight: bold;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -110,6 +145,37 @@ def load_channels(file_path="channels.json"):
         data = json.load(f)
     return data.get("channels", [])
 
+def build_card_html(video, channel_avg_views):
+    """Constructs HTML for a single video card."""
+    color = get_outlier_color(video['outlier_multiplier'])
+    outlier_html = f"<span class='outlier-pill' style='background-color:{color};'>{video['outlier_multiplier']:.1f}x</span>"
+    avg_views = channel_avg_views.get(video["channel_id"], 0)
+    
+    # Truncate description if too long
+    description = video['description']
+    if len(description) > 150:
+        description = description[:150] + "..."
+    
+    card_html = 
+    <div class="video-card">
+        <img src="{video['thumbnail']}" class="video-thumbnail" />
+        <div class="video-title">{video['title']}</div>
+        <div class="video-meta">{video['channel']} • {video['published_at']}</div>
+        <div class="video-meta">
+            <strong>Views:</strong> {format_number(video['view_count'])} |
+            <strong>Duration:</strong> {format_duration(video['duration'])}
+        </div>
+        <div class="video-meta">
+            <strong>Outlier Score:</strong> {outlier_html} |
+            <strong>Channel Avg:</strong> {format_number(int(avg_views))}
+        </div>
+        <div class="video-meta">{description}</div>
+        <div class="video-meta">
+            <a href="{video['url']}" class="video-link">Watch Video</a>
+        </div>
+    </div>
+    return card_html
+
 def main():
     # Sidebar for inputs
     with st.sidebar:
@@ -132,8 +198,6 @@ def main():
     # Main title
     st.title("YouTube Video Dashboard")
     
-    # Search Results Container
-    # We'll only show "Search Results" and "Videos Found" once we have them
     if search_button:
         if not keyword:
             st.sidebar.error("Please enter a search keyword.")
@@ -263,6 +327,7 @@ def main():
             else:
                 results = sorted(results, key=lambda x: x["outlier_multiplier"], reverse=True)
             
+            # Show only the top 10
             results = results[:10]
             search_info.empty()
             
@@ -278,40 +343,22 @@ def main():
                 st.markdown(f"<h2>{len(results)}</h2>", unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
-                # Now display the actual results
-                for i, video in enumerate(results):
-                    with st.expander(f"**{video['title']}**", expanded=True):
-                        cols = st.columns([1, 3])
-                        with cols[0]:
-                            st.image(video['thumbnail'], use_container_width=True)
-                        with cols[1]:
-                            st.write(f"{video['channel']} • {video['published_at']}")
-                            stat_cols = st.columns(4)
-                            with stat_cols[0]:
-                                st.write("VIEWS")
-                                st.write(f"**{format_number(video['view_count'])}**")
-                            with stat_cols[1]:
-                                st.write("DURATION")
-                                st.write(f"**{format_duration(video['duration'])}**")
-                            with stat_cols[2]:
-                                st.write("OUTLIER SCORE")
-                                color = get_outlier_color(video['outlier_multiplier'])
-                                # Pill-like component for the outlier multiplier
-                                st.markdown(
-                                    f"<span style='background-color: {color}; color: white; border-radius: 12px; padding: 5px 10px; font-weight: bold;'>{video['outlier_multiplier']:.1f}x</span>",
-                                    unsafe_allow_html=True
-                                )
-                            with stat_cols[3]:
-                                st.write("CHANNEL AVG")
-                                avg_views = channel_avg_views.get(video["channel_id"], 0)
-                                st.write(f"**{format_number(int(avg_views))}**")
-                            
-                            if len(video['description']) > 150:
-                                st.write(f"{video['description'][:150]}...")
-                            else:
-                                st.write(video['description'])
-                            
-                            st.write(f"[Watch Video]({video['url']})")
+                # Now display the results in a 2-column layout
+                for i in range(0, len(results), 2):
+                    col1, col2 = st.columns(2, gap="large")
+                    
+                    # First video in the row
+                    video1 = results[i]
+                    with col1:
+                        card_html_1 = build_card_html(video1, channel_avg_views)
+                        st.markdown(card_html_1, unsafe_allow_html=True)
+                    
+                    # Second video in the row (if exists)
+                    if i + 1 < len(results):
+                        video2 = results[i + 1]
+                        with col2:
+                            card_html_2 = build_card_html(video2, channel_avg_views)
+                            st.markdown(card_html_2, unsafe_allow_html=True)
         
         except Exception as e:
             st.error(f"An error occurred: {str(e)}")
