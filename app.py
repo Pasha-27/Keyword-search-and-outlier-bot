@@ -11,7 +11,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Apply custom CSS for dark mode and hide specific warning
+# Apply custom CSS for dark mode
 st.markdown("""
 <style>
     /* Dark mode colors */
@@ -57,16 +57,6 @@ st.markdown("""
     .blue-text {
         color: #4c6ef5;
     }
-    
-    /* Hide the specific deprecation warning */
-    .stWarning [data-testid="stMarkdownContainer"] p:contains("use_column_width") {
-        display: none;
-    }
-    
-    /* Hide all warnings */
-    .stWarning {
-        display: none;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -91,15 +81,15 @@ def parse_duration(duration_str):
     try:
         duration = isodate.parse_duration(duration_str)
         return duration.total_seconds()
-    except Exception as e:
+    except Exception:
         return 0
 
 # Format large numbers for display
 def format_number(num):
-    if num >= 1000000:
-        return f"{num/1000000:.1f}M"
-    elif num >= 1000:
-        return f"{num/1000:.1f}K"
+    if num >= 1_000_000:
+        return f"{num/1_000_000:.1f}M"
+    elif num >= 1_000:
+        return f"{num/1_000:.1f}K"
     else:
         return str(num)
 
@@ -287,7 +277,8 @@ def main():
                         
                         # Thumbnail in first column
                         with cols[0]:
-                            st.image(video['thumbnail'], use_column_width=True)
+                            # FIXED: replaced use_column_width with use_container_width
+                            st.image(video['thumbnail'], use_container_width=True)
                             
                         # Video details in second column
                         with cols[1]:
