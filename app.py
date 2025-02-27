@@ -203,7 +203,7 @@ def main():
         
         search_button = st.button("Search Videos")
     
-    st.title("YouTube Video Dashboard")
+    st.title("YouTube God's eye Dashboard")
     
     if search_button:
         if not keyword:
