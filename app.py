@@ -191,8 +191,18 @@ def main():
         st.markdown("MINIMUM OUTLIER MULTIPLIER")
         min_outlier_multiplier = st.slider("", min_value=0.0, max_value=20.0, value=2.0, step=0.1, label_visibility="collapsed")
         st.write("")
+        
+        # Load channels from channels.json to let user select
+        channels_list = load_channels("channels.json")
+        channel_names = [ch["name"] for ch in channels_list]
+        select_all = st.checkbox("Select All Channels", value=True)
+        if select_all:
+            selected_channel_names = channel_names
+        else:
+            selected_channel_names = st.multiselect("Select Channels", options=channel_names)
+        
         search_button = st.button("Search Videos")
-
+    
     st.title("YouTube Video Dashboard")
     
     if search_button:
@@ -200,22 +210,26 @@ def main():
             st.sidebar.error("Please enter a search keyword.")
             return
         
+        if not selected_channel_names:
+            st.sidebar.error("Please select at least one channel.")
+            return
+        
         search_info = st.empty()
-        search_info.info("Searching for videos in Finance channels...")
+        search_info.info("Searching for videos in selected Finance channels...")
         
         try:
             API_KEY = st.secrets["YOUTUBE_API_KEY"]
             youtube = build("youtube", "v3", developerKey=API_KEY)
             
-            # Load channels from JSON
-            channels = load_channels("channels.json")
-            if not channels:
-                search_info.error("No channels found in channels.json. Please update your file.")
+            # Filter channels based on user selection
+            selected_channels = [ch for ch in channels_list if ch["name"] in selected_channel_names]
+            if not selected_channels:
+                search_info.error("No channels selected. Please update your selection.")
                 return
             
-            # Compute each channel's average views (total_views / total_videos)
+            # Compute each selected channel's average views (total_views / total_videos)
             channel_avg_views = {}
-            for ch in channels:
+            for ch in selected_channels:
                 channel_id = ch["id"]
                 channel_response = youtube.channels().list(
                     part="statistics",
@@ -231,8 +245,8 @@ def main():
                     channel_avg_views[channel_id] = 0
             
             all_video_ids = []
-            # Search for videos channel by channel
-            for ch in channels:
+            # Search for videos in each selected channel
+            for ch in selected_channels:
                 channel_id = ch["id"]
                 search_response = youtube.search().list(
                     part="snippet",
@@ -245,10 +259,10 @@ def main():
                 all_video_ids.extend([item["id"]["videoId"] for item in items])
             
             if not all_video_ids:
-                search_info.error("No videos found across the listed channels.")
+                search_info.error("No videos found across the selected channels.")
                 return
             
-            # Retrieve details in chunks of 50
+            # Retrieve video details in chunks of 50
             details_responses = []
             def chunk_list(lst, size=50):
                 for i in range(0, len(lst), size):
@@ -290,7 +304,7 @@ def main():
                 like_count = int(statistics.get("likeCount", 0)) if "likeCount" in statistics else 0
                 comment_count = int(statistics.get("commentCount", 0)) if "commentCount" in statistics else 0
                 
-                # Calculate engagement rate (in percentage)
+                # Calculate engagement rate (percentage)
                 if view_count > 0:
                     engagement_rate = ((like_count + comment_count) / view_count) * 100
                 else:
@@ -344,7 +358,7 @@ def main():
                 st.markdown("VIDEOS FOUND")
                 st.markdown(f"<h2>{len(results)}</h2>", unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
-
+                
                 # Display results in a 3-column layout with a small gap
                 for i in range(0, len(results), 3):
                     columns = st.columns(3, gap="small")
