@@ -54,10 +54,6 @@ st.markdown("""
         padding-top: 1rem;
     }
     
-    /* Blue text for outlier score */
-    .blue-text {
-        color: #4c6ef5;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -304,7 +300,11 @@ def main():
                             with stat_cols[2]:
                                 st.write("OUTLIER SCORE")
                                 color = get_outlier_color(video['outlier_multiplier'])
-                                st.markdown(f"<span style='color: {color};'><b>{video['outlier_multiplier']:.1f}x</b></span>", unsafe_allow_html=True)
+                                # Pill-like component for the outlier multiplier
+                                st.markdown(
+                                    f"<span style='background-color: {color}; color: white; border-radius: 12px; padding: 5px 10px; font-weight: bold;'>{video['outlier_multiplier']:.1f}x</span>",
+                                    unsafe_allow_html=True
+                                )
                             with stat_cols[3]:
                                 st.write("CHANNEL AVG")
                                 avg_views = channel_avg_views.get(video["channel_id"], 0)
