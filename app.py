@@ -4,7 +4,7 @@ import json
 import isodate
 from googleapiclient.discovery import build
 
-# Set page configuration for dark theme
+# Set page configuration for dark mode
 st.set_page_config(
     page_title="YouTube Video Search Dashboard",
     page_icon="🎬",
@@ -59,7 +59,7 @@ st.markdown("""
         background-color: #1e2538;
         border-radius: 10px;
         padding: 1rem;
-        margin-bottom: 0.3rem; /* Reduced bottom margin for tighter vertical spacing */
+        margin-bottom: 0.3rem;
     }
     .video-thumbnail {
         width: 100%;
@@ -146,7 +146,7 @@ def load_channels(file_path="channels.json"):
     return data.get("channels", [])
 
 def build_card_html(video, channel_avg_views):
-    """Constructs HTML for a single video card, including an Engagement Rate metric."""
+    """Constructs HTML for a single video card, including Engagement Rate."""
     color = get_outlier_color(video['outlier_multiplier'])
     outlier_html = f"<span class='outlier-pill' style='background-color:{color};'>{video['outlier_multiplier']:.1f}x</span>"
     avg_views = channel_avg_views.get(video["channel_id"], 0)
@@ -193,7 +193,6 @@ def main():
         st.write("")
         search_button = st.button("Search Videos")
 
-    # Main title
     st.title("YouTube Video Dashboard")
     
     if search_button:
@@ -208,13 +207,13 @@ def main():
             API_KEY = st.secrets["YOUTUBE_API_KEY"]
             youtube = build("youtube", "v3", developerKey=API_KEY)
             
-            # Load channels from JSON (only finance channels)
+            # Load channels from JSON
             channels = load_channels("channels.json")
             if not channels:
                 search_info.error("No channels found in channels.json. Please update your file.")
                 return
             
-            # Get each channel's average views (total_views / total_videos)
+            # Compute each channel's average views (total_views / total_videos)
             channel_avg_views = {}
             for ch in channels:
                 channel_id = ch["id"]
@@ -253,7 +252,7 @@ def main():
             details_responses = []
             def chunk_list(lst, size=50):
                 for i in range(0, len(lst), size):
-                    yield lst[i : i + size]
+                    yield lst[i: i + size]
             for chunk in chunk_list(all_video_ids, 50):
                 details_response = youtube.videos().list(
                     part="contentDetails,statistics,snippet",
@@ -287,33 +286,32 @@ def main():
                     not any(keyword_lower in tag.lower() for tag in tags)):
                     continue
                 
-                # Retrieve stats
                 view_count = int(statistics.get("viewCount", 0))
                 like_count = int(statistics.get("likeCount", 0)) if "likeCount" in statistics else 0
                 comment_count = int(statistics.get("commentCount", 0)) if "commentCount" in statistics else 0
                 
-                # Calculate outlier multiplier
+                # Calculate engagement rate (in percentage)
+                if view_count > 0:
+                    engagement_rate = ((like_count + comment_count) / view_count) * 100
+                else:
+                    engagement_rate = 0.0
+                
+                # New outlier score calculation: 
+                # (Video view count * (1 + (engagement_rate/100))) / Channel average views
                 if channel_id in channel_avg_views and channel_avg_views[channel_id] > 0:
-                    multiplier = view_count / channel_avg_views[channel_id]
+                    multiplier = (view_count * (1 + (engagement_rate / 100))) / channel_avg_views[channel_id]
                 else:
                     multiplier = 0
                 
                 if multiplier <= min_outlier_multiplier:
                     continue
                 
-                # Video duration filter
                 duration_str = contentDetails.get("duration", "PT0S")
                 duration_seconds = parse_duration(duration_str)
                 if video_type == "Short (< 3 mins)" and duration_seconds >= 180:
                     continue
                 if video_type == "Long (>= 3 mins)" and duration_seconds < 180:
                     continue
-                
-                # Calculate engagement rate
-                if view_count > 0:
-                    engagement_rate = ((like_count + comment_count) / view_count) * 100
-                else:
-                    engagement_rate = 0.0
                 
                 results.append({
                     "video_id": video_id,
@@ -330,29 +328,24 @@ def main():
                     "engagement_rate": engagement_rate
                 })
             
-            # Sort results based on the chosen sort option
             if sort_option == "View Count":
                 results = sorted(results, key=lambda x: x["view_count"], reverse=True)
             else:
                 results = sorted(results, key=lambda x: x["outlier_multiplier"], reverse=True)
             
-            # Show only the top 10
             results = results[:10]
             search_info.empty()
             
             if not results:
                 st.error("No videos match the criteria.")
             else:
-                # Show "Search Results" heading
                 st.header("Search Results")
-                
-                # Show "Videos Found" metric below the heading
                 st.markdown('<div class="metric-container">', unsafe_allow_html=True)
                 st.markdown("VIDEOS FOUND")
                 st.markdown(f"<h2>{len(results)}</h2>", unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
-                # Display results in a 3-column layout with a smaller gap
+                # Display results in a 3-column layout with a small gap
                 for i in range(0, len(results), 3):
                     columns = st.columns(3, gap="small")
                     for j in range(3):
